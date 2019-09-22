@@ -4,9 +4,15 @@ import numpy as np
 import pandas as pd
 import xlwings as xw
 from ib_insync import *
+import sys, signal
 
 
 def stream_data():
+    def signal_handler(signal, frame):
+        print("closing....")
+        ib.disconnect()
+        sys.exit(0)
+
     def get_libor_func():
         print('retrieving Libor rates....')
         tables = pd.read_html("https://www.finanzen.net/zinsen/libor/usd")
@@ -178,8 +184,9 @@ def stream_data():
             df = update_price(tickers, spx_ticker, contracts)
             sht1.range('A1').options(index=False).value = df
 
-    # create ib_insync IB() instance and connect to TWS
 
+    signal.signal(signal.SIGINT, signal_handler)
+# create ib_insync IB() instance and connect to TWS
     ib = IB()
     ib.sleep(0.1)
     conn_tws()
