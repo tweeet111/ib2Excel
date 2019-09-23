@@ -13,4 +13,6 @@ strike_range= 0.3   # only update strikes up or down from current SPX spot (e.g.
 wait_sec = 0.1
 
 # Excel workbook name
-workbook = 'Backtest_software_v0.069.xlsm'
+#workbook = 'Backtest_software_v0.069.xlsm'
+workbook = "live_example.xlsb"
+stream2tab = "DATA" # "FM_FEED"

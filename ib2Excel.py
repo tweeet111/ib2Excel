@@ -190,7 +190,7 @@ def stream_data():
     tickers, spx_ticker, contracts = get_tickers(min_dte, max_dte, strike_distance, strike_range)
     print('connecting to Excel workbook...')
     wb = xw.Book(workbook)
-    sht1 = wb.sheets['FM_FEED']
+    sht1 = wb.sheets[stream2tab]
     sht2 = wb.sheets['RFRATE']
     print('streaming Libor data to Excel...')
     sht2.range('c1').options(index=False).value = df_lib
