@@ -61,9 +61,11 @@ def stream_data():
         chain_spxw = next(c for c in chains if (c.tradingClass == 'SPXW' and c.exchange == 'SMART'))
 
         print('getting SPX live...')
-        spx_ticker = ib.reqMktData(spx, '', False, False)
+        #spx_ticker = ib.reqMktData(spx, '', False, False)
+        spx_ticker = ib.reqTickers(spx)
         ib.sleep(1)
-        spxValue = spx_ticker.marketPrice()
+        #spxValue = spx_ticker.marketPrice()
+        spxValue = spx_ticker[0].last
         print(spxValue)
         ib.sleep(1)
 
@@ -109,16 +111,22 @@ def stream_data():
 
         print('setting up ticker...')
         startTime = dt.now()
-        tickers = ib.reqTickers(*contracts)
+        #tickers = ib.reqTickers(*contracts)
         setupTime = dt.now() - startTime
         print('finished setting up ticker in ' + str(setupTime) + 's')
         print('Startup finished!')
-        return tickers, spx_ticker, contracts
+        return contracts, spx
 
-    def update_price(tickers, spx_ticker, contracts):
+    def update_price(contracts, spx):
 
         now = dt.now()
-        spxValue = spx_ticker.marketPrice()
+        #spxValue = spx_ticker.marketPrice()
+        spx_ticker = ib.reqTickers(spx)
+        spxValue = spx_ticker[0].last
+
+
+        print('updating...')
+        tickers = ib.reqTickers(*contracts)
 
         df = pd.DataFrame(columns='STRIKE RIGHT EXPIRATION SYMBOL bid ask'.split())
 
@@ -140,7 +148,7 @@ def stream_data():
         df['TRADE_DT'] = now.strftime("%Y%m%d")
         df['TRADE_TIME'] = now.strftime("%H:%M:%S")
 
-        # display(df)
+        print("Timestamp of latest ticker update: " + str(now.strftime("%H:%M:%S")))
         df_calls = df[df['RIGHT'] == 'C']
         df_puts = df[df['RIGHT'] == 'P']
         df_puts = df_puts.rename(columns={'R_REF': 'PUT_REF'})
@@ -161,18 +169,21 @@ def stream_data():
                 "PUT_REF", "PUT_MID"]
         df_exp = df_exp[cols]
         # df_exp = df_exp.query("CALL_MID>=0 & PUT_MID>=0" )  # delete negative prices bad data
+        updateTime = dt.now() - now
+        print('finished updating ticker in ' + str(updateTime) + 's')
+        print(updateTime)
 
         return df_exp
 
-    def start_streaming(tickers, spx_ticker, contracts, wait_sec=0.1):
+    def start_streaming(contracts, spx, wait_sec=0.1):
         # timeout = time.time() + 30  # timeout loop after 30s
         # while time.time() < timeout:
-        print('starting live data stream to Excel...')
+        print('starting live data stream to Excel...every ' + str(wait_sec) + "seconds")
         while True:
             ib.sleep(wait_sec)
             #     ib.pendingTickersEvent(tickers)
             #     ib.sleep(10)
-            df = update_price(tickers, spx_ticker, contracts)
+            df = update_price(contracts, spx)
             sht1.range('A1').options(index=False).value = df
 
 
@@ -187,7 +198,7 @@ def stream_data():
     df_lib = get_libor_func()
     print('Libor download finished')
 
-    tickers, spx_ticker, contracts = get_tickers(min_dte, max_dte, strike_distance, strike_range)
+    contracts, spx = get_tickers(min_dte, max_dte, strike_distance, strike_range)
     print('connecting to Excel workbook...')
     wb = xw.Book(workbook)
     sht1 = wb.sheets[stream2tab]
@@ -195,7 +206,7 @@ def stream_data():
     print('streaming Libor data to Excel...')
     sht2.range('c1').options(index=False).value = df_lib
 
-    start_streaming(tickers, spx_ticker, contracts, wait_sec)
+    start_streaming(contracts, spx, wait_sec)
 
 
 if __name__ == "__main__":
