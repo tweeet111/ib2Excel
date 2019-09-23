@@ -5,6 +5,7 @@ import pandas as pd
 import xlwings as xw
 from ib_insync import *
 import sys, signal
+from setup import *
 
 
 def stream_data():
@@ -39,7 +40,7 @@ def stream_data():
         while ib.isConnected() == False and i < 20:
             try:
                 print("connecting...")
-                ib.connect('127.0.0.1', 7496, clientId=client, timeout=None)  # tws 7496 gateway 4001 (see TWS settings)
+                ib.connect('127.0.0.1', tws_port, clientId=client, timeout=None)  # tws 7496 gateway 4001 (see TWS settings)
                 ib.sleep(1)
             except ConnectionRefusedError:
                 ib.sleep(3)
@@ -105,14 +106,6 @@ def stream_data():
         print('number of contracts: ' + str(len(contracts)))
         setupTime = dt.now() - startTime
         print('finished finding contracts in ' + str(setupTime) + 's')
-        # print (contracts)
-
-        # request kontinuierliche Ticker Updates
-        # print('requesting data for all contracts...')
-        # for contract in contracts:
-        # 	ib.reqMktData(contract, '', False, False)
-        # setupTime = dt.now() - startTime
-        # print('finished requesting data for all contracts in ' + str(setupTime) +'s')
 
         print('setting up ticker...')
         startTime = dt.now()
@@ -143,15 +136,13 @@ def stream_data():
         df['mid'] = (df['bid'] + df['ask']) / 2
         df['OPTION_REF'] = df['SYMBOL'].str.ljust(6) + df.EXPIRATION
         df['R_REF'] = [c.localSymbol for c in contracts]
-        # df['CALL_REF'] = np.where(df.RIGHT == "C", df['SYMBOL'].str.ljust(6) + df.EXPIRATION + df.RIGHT + df.STRIKE.apply(lambda x: x.__str__().zfill(5).ljust(8, '0')), None)
-        # df['PUT_REF'] = np.where(df.RIGHT == "P", df['SYMBOL'].str.ljust(6) + df.EXPIRATION + df.RIGHT + df.STRIKE.apply(lambda x: x.__str__().zfill(5).ljust(8, '0')), None)
         df['UNDLY_PRICE'] = spxValue
         df['TRADE_DT'] = now.strftime("%Y%m%d")
         df['TRADE_TIME'] = now.strftime("%H:%M:%S")
 
         # display(df)
         df_calls = df[df['RIGHT'] == 'C']
-        df_puts = df[df['RIGHT'] == 'P']  # .drop(['CALL_REF'], axis=1)
+        df_puts = df[df['RIGHT'] == 'P']
         df_puts = df_puts.rename(columns={'R_REF': 'PUT_REF'})
 
         df_calls = df_calls[['STRIKE', 'R_REF', 'mid', 'OPTION_REF']]
@@ -196,15 +187,15 @@ def stream_data():
     df_lib = get_libor_func()
     print('Libor download finished')
 
-    tickers, spx_ticker, contracts = get_tickers()
+    tickers, spx_ticker, contracts = get_tickers(min_dte, max_dte, strike_distance, strike_range)
     print('connecting to Excel workbook...')
-    wb = xw.Book('Backtest_software_v0.069.xlsm')
+    wb = xw.Book(workbook)
     sht1 = wb.sheets['FM_FEED']
     sht2 = wb.sheets['RFRATE']
     print('streaming Libor data to Excel...')
     sht2.range('c1').options(index=False).value = df_lib
 
-    start_streaming(tickers, spx_ticker, contracts)
+    start_streaming(tickers, spx_ticker, contracts, wait_sec)
 
 
 if __name__ == "__main__":
