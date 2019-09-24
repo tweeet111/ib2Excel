@@ -11,7 +11,7 @@ Setup:
 4) Setup chain variables in setup.py to limit data to desired extent
 5) Setup update interval (0.1 will give fastest updates possible and will take 1-8 seconds 
    dependent from the number of subscripted chains and strikes)
-5) run setup.py
+5) run ib2excel.py
 6) closing with CTRL+C will disconnect from IB API and shut down properly.
 
 
