@@ -10,10 +10,10 @@ strike_distance= 25 # only update strikes divisible by value (25, 10, 50)
 strike_range= 0.4   # only update strikes up or down from current SPX spot (e.g. -50% to + 50%)
 
 # update interval in seconds
-wait_openpos = 1
+wait_openpos = 0.1
 wait_data = 120
 
 # Excel workbook name
 #workbook = 'Backtest_software_v0.069.xlsm'
-workbook = "live_example2.xlsb"
+workbook = "live_example3.xlsb"
 stream2tab = "DATA" # "FM_FEED"

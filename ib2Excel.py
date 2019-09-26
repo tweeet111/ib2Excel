@@ -65,9 +65,12 @@ def get_tickers(min_dte=30, max_dte=250, strike_distance=25, strike_range=0.5):
 	#spx_ticker = ib.reqMktData(spx, '', False, False)
 	spx_ticker = ib.reqTickers(spx)
 	ib.sleep(1)
-	#spxValue = spx_ticker[0].marketPrice()
-	spxValue = spx_ticker[0].last
+
+	spxValue = spx_ticker[0].marketPrice()
+	#spxValue = spx_ticker[0].last
 	print(spxValue)
+
+
 	ib.sleep(1)
 
 	print('combining SPX/SPXW expirations...')
@@ -109,12 +112,6 @@ def get_tickers(min_dte=30, max_dte=250, strike_distance=25, strike_range=0.5):
 	print('number of contracts: ' + str(len(contracts)))
 	setupTime = dt.now() - startTime
 	print('finished finding contracts in ' + str(setupTime) + 's')
-
-	print('setting up ticker...')
-	startTime = dt.now()
-	#tickers = ib.reqTickers(*contracts)
-	setupTime = dt.now() - startTime
-	print('finished setting up ticker in ' + str(setupTime) + 's')
 	print('Startup finished!')
 	return contracts, spx
 
@@ -129,7 +126,7 @@ def update_price(contracts, spx):
 
 	print('updating Data tab...')
 	tickers = ib.reqTickers(*contracts)
-	ib.sleep(2)
+	ib.sleep(3)
 
 	df = pd.DataFrame(columns='STRIKE RIGHT EXPIRATION SYMBOL bid ask'.split())
 
@@ -181,42 +178,80 @@ def start_streaming(contracts, spx):
 	df = update_price(contracts, spx)
 	sht1.range('A1').options(index=False).value = df
 
-def update_ticks(spx):
-	spx_ticker = ib.reqTickers(spx)
-	spxValue = spx_ticker[0].last
-	#spxValue = spx_ticker[0].marketPrice()
+class OpenPos(object):
+	def __init__(self, spx):
+		print("setting up openpos class...")
 
-	# grab contracts from OPENPOS sheet
+		self.cons = [i for i in sht3.range('B2').expand('down').value if i!=0]
+		self.contracts = [Contract('SPX', secType="OPT", localSymbol=opra, exchange='SMART')
+					 for opra in self.cons]
+		ib.qualifyContracts(*self.contracts)
 
-	print('updating ticks...')
-	cons = sht3.range('B2').expand('down')
-	open_cons = cons.value
-	open_cons = [i for i in open_cons if i != 0]
-	contracts = [Contract('SPX', secType="OPT", localSymbol=opra, exchange='SMART')
-				 for opra in open_cons]
-	ib.qualifyContracts(*contracts)
-	tickers = [ib.reqMktData(c, '', False, False) for c in contracts]
-	ib.sleep(1)
 
-	now = dt.now()
-	df = pd.DataFrame(columns='localSymbol bid ask'.split())
-	df['localSymbol'] = [c.localSymbol for c in contracts]
-	contract2Row = {c: i for (i, c) in enumerate(contracts)}
+		self.spx_ticker = ib.reqMktData(spx, '', False, False)
+		self.open_tickers = [ib.reqMktData(c, '', False, False) for c in self.contracts]
 
-	for t in tickers:
-		row = contract2Row[t.contract]
-		df.iloc[row, 1:] = (t.bid, t.ask)
-	df= df[["bid","ask"]]
-	df['mid'] = (df['bid'] + df['ask']) / 2
 
-	df['time'] = now.strftime("%H:%M:%S")
+	def update_ticks(self):
+		#spx_ticker = ib.reqTickers(self.spx)
+		#spxValue = spx_ticker[0].last
+		spxValue = self.spx_ticker.marketPrice()
+		ib.sleep(0.2)
 
-	print("Timestamp of latest openpos update: " + str(now.strftime("%H:%M:%S")))
-	return df
+		# grab contracts from OPENPOS sheet
+		cons = [i for i in sht3.range('B2').expand('down').value if i!=0]
+		if cons == self.cons:
+			print('updating ticks...')
+			now = dt.now()
+			df = pd.DataFrame(columns='localSymbol bid ask'.split())
+			df['localSymbol'] = [c.localSymbol for c in self.contracts]
+			contract2Row = {c: i for (i, c) in enumerate(self.contracts)}
 
-def start_ticks(spx):
-	df = update_ticks(spx)
-	sht3.range('C1').options(index=False).value = df
+			for t in self.open_tickers:
+				row = contract2Row[t.contract]
+				df.iloc[row, 1:] = (t.bid, t.ask)
+			df = df[["bid", "ask"]]
+			df['mid'] = (df['bid'] + df['ask']) / 2
+
+			df['time'] = now.strftime("%H:%M:%S")
+			df['SPX'] = spxValue
+
+			print("Timestamp of latest openpos update: " + str(now.strftime("%H:%M:%S")))
+			return df, self.open_tickers, self.cons
+		else:
+			self.cons = cons
+			print('updating new ticks...')
+			self.contracts = [Contract('SPX', secType="OPT", localSymbol=opra, exchange='SMART')
+						 for opra in cons]
+			ib.qualifyContracts(*self.contracts)
+			ib.sleep(0.2)
+			self.open_tickers = [ib.reqMktData(c, '', False, False) for c in self.contracts]
+			ib.sleep(0.5)
+
+			now = dt.now()
+			df = pd.DataFrame(columns='localSymbol bid ask'.split())
+			df['localSymbol'] = [c.localSymbol for c in self.contracts]
+			contract2Row = {c: i for (i, c) in enumerate(self.contracts)}
+
+			for t in self.open_tickers:
+				row = contract2Row[t.contract]
+				df.iloc[row, 1:] = (t.bid, t.ask)
+			df = df[["bid", "ask"]]
+			df['mid'] = (df['bid'] + df['ask']) / 2
+
+			df['time'] = now.strftime("%H:%M:%S")
+			df['SPX'] = spxValue
+			print (df)
+
+			print("Timestamp of latest openpos update: " + str(now.strftime("%H:%M:%S")))
+			return df, self.open_tickers, self.cons
+
+
+
+
+def start_ticks():
+	df = op.update_ticks()[0]  # return only df (not self.opentickers and self.cons)
+	sht3.range('C1').options(index=False, expand='table').value = df
 
 
 if __name__ == "__main__":
@@ -244,7 +279,7 @@ if __name__ == "__main__":
 	sht2.range('c1').options(index=False).value = df_lib
 
 
-
+	op = OpenPos(spx)
 
 	print("starting data streaming...")
 	while True:
@@ -252,6 +287,6 @@ if __name__ == "__main__":
 		end = time.time() + wait_data
 		while time.time() < end:
 			ib.sleep(wait_openpos)
-			start_ticks(spx)
+			start_ticks()
 
 
