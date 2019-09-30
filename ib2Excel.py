@@ -8,6 +8,7 @@ from setup import *
 import time
 
 
+
 def signal_handler(signal, frame):
 	print("closing....")
 	ib.disconnect()
@@ -66,8 +67,8 @@ def get_tickers(min_dte=30, max_dte=250, strike_distance=25, strike_range=0.5):
 	spx_ticker = ib.reqTickers(spx)
 	ib.sleep(1)
 
-	spxValue = spx_ticker[0].marketPrice()
-	#spxValue = spx_ticker[0].last
+	#spxValue = spx_ticker[0].marketPrice()
+	spxValue = spx_ticker[0].last
 	print(spxValue)
 
 
@@ -120,6 +121,7 @@ def update_price(contracts, spx):
 	now = dt.now()
 
 	spx_ticker = ib.reqTickers(spx)
+	ib.sleep(0.5)
 	#spxValue = spx_ticker[0].marketPrice()
 	spxValue = spx_ticker[0].last
 
@@ -194,9 +196,9 @@ class OpenPos(object):
 
 	def update_ticks(self):
 		#spx_ticker = ib.reqTickers(self.spx)
-		#spxValue = spx_ticker[0].last
-		spxValue = self.spx_ticker.marketPrice()
-		ib.sleep(0.2)
+		spxValue = self.spx_ticker.last
+		#spxValue = self.spx_ticker.marketPrice()
+		ib.sleep(0.5)
 
 		# grab contracts from OPENPOS sheet
 		cons = [i for i in sht3.range('B2').expand('down').value if i!=0]
