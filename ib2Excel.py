@@ -6,6 +6,7 @@ from ib_insync import *
 import sys, signal
 from setup import *
 import time
+from pythoncom import com_error
 
 
 
@@ -51,27 +52,20 @@ def conn_tws(client=np.random.randint(0, 10)):
 		print("Timeout")
 
 def get_tickers(min_dte=30, max_dte=250, strike_distance=25, strike_range=0.5):
+	print('getting SPX live...')
 	ib.reqMarketDataType(marketDataType=2)
-	print('getting SPX...')
 	spx = Index('SPX', 'CBOE')
-	ib.sleep(1)
 	ib.qualifyContracts(spx)
-	ib.sleep(1)
+	spx_ticker = ib.reqMktData(spx, '', False, False)
+	while spx_ticker.marketPrice() != spx_ticker.marketPrice():
+		ib.sleep(0.01)
+	spxValue = spx_ticker.marketPrice()
+	print(spxValue)
+
 	print('getting chains...')
 	chains = ib.reqSecDefOptParams(spx.symbol, '', spx.secType, spx.conId)
 	chain_spx = next(c for c in chains if (c.tradingClass == 'SPX' and c.exchange == 'SMART'))
 	chain_spxw = next(c for c in chains if (c.tradingClass == 'SPXW' and c.exchange == 'SMART'))
-
-	print('getting SPX live...')
-	#spx_ticker = ib.reqMktData(spx, '', False, False)
-	spx_ticker = ib.reqTickers(spx)
-	ib.sleep(1)
-
-	#spxValue = spx_ticker[0].marketPrice()
-	spxValue = spx_ticker[0].last
-	print(spxValue)
-
-
 	ib.sleep(1)
 
 	print('combining SPX/SPXW expirations...')
@@ -120,10 +114,10 @@ def update_price(contracts, spx):
 
 	now = dt.now()
 
-	spx_ticker = ib.reqTickers(spx)
-	ib.sleep(0.5)
-	#spxValue = spx_ticker[0].marketPrice()
-	spxValue = spx_ticker[0].last
+	spx_ticker = ib.reqMktData(spx, '', False, False)
+	while spx_ticker.marketPrice() != spx_ticker.marketPrice():
+		ib.sleep(0.01)
+	spxValue = spx_ticker.marketPrice()
 
 
 	print('updating Data tab...')
@@ -195,9 +189,10 @@ class OpenPos(object):
 
 
 	def update_ticks(self):
-		#spx_ticker = ib.reqTickers(self.spx)
-		spxValue = self.spx_ticker.last
-		#spxValue = self.spx_ticker.marketPrice()
+		while self.spx_ticker.marketPrice() != self.spx_ticker.marketPrice():
+			ib.sleep(0.01)
+
+		spxValue = self.spx_ticker.marketPrice()
 		ib.sleep(0.5)
 
 		# grab contracts from OPENPOS sheet
@@ -253,7 +248,13 @@ class OpenPos(object):
 
 def start_ticks():
 	df = op.update_ticks()[0]  # return only df (not self.opentickers and self.cons)
-	sht3.range('C1').options(index=False, expand='table').value = df
+	while True: # run loop to prevent Excel error when interacting with sheet
+		try:
+			sht3.range('C1').options(index=False, expand='table').value = df
+			break
+		except com_error as reason:
+			print (reason)
+			continue
 
 
 if __name__ == "__main__":
