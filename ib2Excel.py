@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import xlwings as xw
 from ib_insync import *
+from ib_insync.util import isNan
 import sys, signal
 from setup import *
 import time
@@ -57,9 +58,13 @@ def get_tickers(min_dte=30, max_dte=250, strike_distance=25, strike_range=0.5):
 	spx = Index('SPX', 'CBOE')
 	ib.qualifyContracts(spx)
 	spx_ticker = ib.reqMktData(spx, '', False, False)
-	while spx_ticker.marketPrice() != spx_ticker.marketPrice():
+	while spx_ticker.last != spx_ticker.last:
 		ib.sleep(0.01)
-	spxValue = spx_ticker.marketPrice()
+	if isNan(spx_ticker.last):
+		spxValue = spx_ticker.close
+	else:
+		spxValue = spx_ticker.last
+
 	print(spxValue)
 
 	print('getting chains...')
@@ -115,21 +120,24 @@ def update_price(contracts, spx):
 	now = dt.now()
 
 	spx_ticker = ib.reqMktData(spx, '', False, False)
-	while spx_ticker.marketPrice() != spx_ticker.marketPrice():
+	while spx_ticker.last != spx_ticker.last:
 		ib.sleep(0.01)
-	spxValue = spx_ticker.marketPrice()
+	if isNan(spx_ticker.last):
+		spxValue = spx_ticker.close
+	else:
+		spxValue = spx_ticker.last
 
 
 	print('updating Data tab...')
 	tickers = ib.reqTickers(*contracts)
 	ib.sleep(3)
 
-	df = pd.DataFrame(columns='STRIKE RIGHT EXPIRATION SYMBOL bid ask'.split())
+	df = pd.DataFrame(columns='STRIKE RIGHT EXPIRATION UNDLY bid ask'.split())
 
 	df['STRIKE'] = [c.strike for c in contracts]
 	df['RIGHT'] = [c.right for c in contracts]
 	df['EXPIRATION'] = [c.lastTradeDateOrContractMonth for c in contracts]
-	df['SYMBOL'] = [c.symbol for c in contracts]
+	df['UNDLY'] = [c.symbol for c in contracts]
 	contract2Row = {c: i for (i, c) in enumerate(contracts)}
 	df['STRIKE'] = df['STRIKE'].astype(int)
 
@@ -137,9 +145,9 @@ def update_price(contracts, spx):
 		row = contract2Row[t.contract]
 		df.iloc[row, 4:] = (t.bid, t.ask)
 
-	df['mid'] = (df['bid'] + df['ask']) / 2
-	df['OPTION_REF'] = df['SYMBOL'].str.ljust(6) + df.EXPIRATION
-	df['R_REF'] = [c.localSymbol for c in contracts]
+	df['MID'] = (df['bid'] + df['ask']) / 2
+	#df['OPTION_REF'] = df['SYMBOL'].str.ljust(6) + df.EXPIRATION
+	df['OPTION_REF'] = [c.localSymbol for c in contracts]
 	df['UNDLY_PRICE'] = spxValue
 	df['TRADE_DT'] = now.strftime("%Y%m%d")
 	df['TRADE_TIME'] = now.strftime("%H:%M:%S")
@@ -147,22 +155,22 @@ def update_price(contracts, spx):
 	print("Timestamp of latest ticker update: " + str(now.strftime("%H:%M:%S")))
 	df_calls = df[df['RIGHT'] == 'C']
 	df_puts = df[df['RIGHT'] == 'P']
-	df_puts = df_puts.rename(columns={'R_REF': 'PUT_REF'})
+	#df_puts = df_puts.rename(columns={'R_REF': 'PUT_REF'})
 
-	df_calls = df_calls[['STRIKE', 'R_REF', 'mid', 'OPTION_REF']]
-	df_calls = df_calls.rename(columns={'mid': 'CALL_MID'})
-	df_calls = df_calls.rename(columns={'R_REF': 'CALL_REF'})
+	#df_calls = df_calls[['STRIKE', 'OPTION_REF', 'MID']]
+	#df_calls = df_calls.rename(columns={'mid': 'CALL_MID'})
+	#df_calls = df_calls.rename(columns={'R_REF': 'CALL_REF'})
 
-	df_exp = df_puts.merge(df_calls, on=["OPTION_REF", "STRIKE"], how='left')
-	df_exp['CALL_MID'] = pd.to_numeric(df_exp['CALL_MID'])
-	df_exp = df_exp.rename(columns={'mid': 'PUT_MID'})
-	df_exp = df_exp.rename(columns={'SYMBOL': 'UNDLY'})
+	#df_exp = df_puts.merge(df_calls, on=["EXPIRATION", "STRIKE"], how='left')
+	df_exp = pd.concat([df_puts, df_calls], axis=0)
+	df_exp['MID'] = pd.to_numeric(df_exp['MID'])
+	#df_exp = df_exp.rename(columns={'mid': 'PUT_MID'})
+	#df_exp = df_exp.rename(columns={'SYMBOL': 'UNDLY'})
 	df_exp = df_exp.drop(['bid', 'ask'], axis=1)
-	df_exp = df_exp.sort_values(['TRADE_DT', 'TRADE_TIME', 'OPTION_REF', 'STRIKE'], ascending=False)
+	df_exp = df_exp.sort_values(['TRADE_DT', 'TRADE_TIME', 'EXPIRATION', 'STRIKE'], ascending=False)
 	df_exp.reset_index(drop=True, inplace=True)
 
-	cols = ["TRADE_DT", "TRADE_TIME", "UNDLY", "UNDLY_PRICE", "OPTION_REF", "STRIKE", "CALL_REF", "CALL_MID",
-			"PUT_REF", "PUT_MID"]
+	cols = ["TRADE_DT", "TRADE_TIME", "UNDLY", "UNDLY_PRICE", "EXPIRATION", "STRIKE", "RIGHT", "OPTION_REF", "MID"]
 	df_exp = df_exp[cols]
 	# df_exp = df_exp.query("CALL_MID>=0 & PUT_MID>=0" )  # delete negative prices bad data
 	updateTime = dt.now() - now
@@ -189,10 +197,13 @@ class OpenPos(object):
 
 
 	def update_ticks(self):
-		while self.spx_ticker.marketPrice() != self.spx_ticker.marketPrice():
+		while self.spx_ticker.last != self.spx_ticker.last:
 			ib.sleep(0.01)
+		if isNan(self.spx_ticker.last):
+			spxValue = self.spx_ticker.close
+		else:
+			spxValue = self.spx_ticker.last
 
-		spxValue = self.spx_ticker.marketPrice()
 		ib.sleep(0.5)
 
 		# grab contracts from OPENPOS sheet
@@ -211,6 +222,7 @@ class OpenPos(object):
 			df['mid'] = (df['bid'] + df['ask']) / 2
 
 			df['time'] = now.strftime("%H:%M:%S")
+			df['date'] = now.strftime("%Y%m%d")
 			df['SPX'] = spxValue
 
 			print("Timestamp of latest openpos update: " + str(now.strftime("%H:%M:%S")))
@@ -237,6 +249,7 @@ class OpenPos(object):
 			df['mid'] = (df['bid'] + df['ask']) / 2
 
 			df['time'] = now.strftime("%H:%M:%S")
+			df['date'] = now.strftime("%Y%m%d")
 			df['SPX'] = spxValue
 			print (df)
 
