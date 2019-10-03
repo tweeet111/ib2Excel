@@ -167,7 +167,7 @@ def update_price(contracts, spx):
 	#df_exp = df_exp.rename(columns={'mid': 'PUT_MID'})
 	#df_exp = df_exp.rename(columns={'SYMBOL': 'UNDLY'})
 	df_exp = df_exp.drop(['bid', 'ask'], axis=1)
-	df_exp = df_exp.sort_values(['TRADE_DT', 'TRADE_TIME', 'EXPIRATION', 'STRIKE'], ascending=False)
+	df_exp = df_exp.sort_values(['EXPIRATION', 'STRIKE', 'RIGHT', 'TRADE_DT', 'TRADE_TIME', ], ascending=False)
 	df_exp.reset_index(drop=True, inplace=True)
 
 	cols = ["TRADE_DT", "TRADE_TIME", "UNDLY", "UNDLY_PRICE", "EXPIRATION", "STRIKE", "RIGHT", "OPTION_REF", "MID"]
@@ -180,6 +180,7 @@ def update_price(contracts, spx):
 
 def start_streaming(contracts, spx):
 	df = update_price(contracts, spx)
+	sht1.clear_contents()
 	sht1.range('A1').options(index=False).value = df
 
 class OpenPos(object):
