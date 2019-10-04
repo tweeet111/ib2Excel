@@ -52,7 +52,16 @@ def conn_tws(client=np.random.randint(0, 10)):
 	else:
 		print("Timeout")
 
-def get_tickers(min_dte=30, max_dte=250, strike_distance=25, strike_range=0.5):
+def get_tickers(min_dte=30, max_dte=250, strike_distance=25, upper_strike_range=0.2, lower_strike_range=0.5):
+	print(30 * '-')
+	print ('limit data with this setup: ')
+	print('strike intervals: ' + str(strike_distance))
+	print ('min dte: ' + str(min_dte))
+	print('max dte: ' + str(max_dte))
+	print('upper strike range: ' + str(upper_strike_range))
+	print('lower strike range: ' + str(lower_strike_range))
+	print(30*'-')
+
 	print('getting SPX live...')
 	ib.reqMarketDataType(marketDataType=2)
 	spx = Index('SPX', 'CBOE')
@@ -76,7 +85,7 @@ def get_tickers(min_dte=30, max_dte=250, strike_distance=25, strike_range=0.5):
 	print('combining SPX/SPXW expirations...')
 	strikes = [strike for strike in chain_spx.strikes
 			   if strike % strike_distance == 0
-			   and spxValue - strike_range * spxValue < strike < spxValue + strike_range * spxValue]
+			   and spxValue - lower_strike_range * spxValue < strike < spxValue + upper_strike_range * spxValue]
 
 	expirations_spx = sorted(exp for exp in chain_spx.expirations)
 	# print(expirations_spx)
@@ -286,7 +295,7 @@ if __name__ == "__main__":
 	df_lib = get_libor_func()
 	print('Libor download finished')
 
-	contracts, spx = get_tickers(min_dte, max_dte, strike_distance, strike_range)
+	contracts, spx = get_tickers(min_dte, max_dte, strike_distance, upper_strike_range, lower_strike_range)
 	print('connecting to Excel workbook...')
 	wb = xw.Book(workbook)
 	sht1 = wb.sheets[stream2tab]

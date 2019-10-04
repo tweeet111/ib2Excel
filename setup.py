@@ -7,7 +7,8 @@ tws_port = 7496
 min_dte=120       # chains below are not updated
 max_dte=160       # chains above are not updated
 strike_distance= 25 # only update strikes divisible by value (25, 10, 50)
-strike_range= 0.3   # only update strikes up or down from current SPX spot (e.g. -50% to + 50%)
+upper_strike_range= 0.1   # only update strikes up  from current SPX spot (e.g. + 50%)
+lower_strike_range= 0.5  # only update strikes  down from current SPX spot (e.g. -50% )
 
 # update interval in seconds
 wait_openpos = 0.1
