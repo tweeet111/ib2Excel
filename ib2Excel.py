@@ -8,6 +8,8 @@ import sys, signal
 from setup import *
 import time
 from pythoncom import com_error
+import nest_asyncio
+
 
 
 
@@ -176,7 +178,7 @@ def update_price(contracts, spx):
 	#df_exp = df_exp.rename(columns={'mid': 'PUT_MID'})
 	#df_exp = df_exp.rename(columns={'SYMBOL': 'UNDLY'})
 	df_exp = df_exp.drop(['bid', 'ask'], axis=1)
-	df_exp = df_exp.sort_values(['RIGHT','EXPIRATION', 'STRIKE', 'TRADE_DT', 'TRADE_TIME', ], ascending=False)
+	df_exp = df_exp.sort_values(['EXPIRATION', 'RIGHT', 'STRIKE', 'TRADE_DT', 'TRADE_TIME', ], ascending=False)
 	df_exp.reset_index(drop=True, inplace=True)
 
 	cols = ["TRADE_DT", "TRADE_TIME", "UNDLY", "UNDLY_PRICE", "EXPIRATION", "STRIKE", "RIGHT", "OPTION_REF", "MID"]
@@ -189,7 +191,7 @@ def update_price(contracts, spx):
 
 def start_streaming(contracts, spx):
 	df = update_price(contracts, spx)
-	sht1.range('A1:I1').expand('right').clear_contents()
+	sht1.range('A1:I1').expand('down').clear_contents()
 	sht1.range('A1:I1').options(index=False).value = df
 
 class OpenPos(object):
@@ -266,8 +268,74 @@ class OpenPos(object):
 			print("Timestamp of latest openpos update: " + str(now.strftime("%H:%M:%S")))
 			return df, self.open_tickers, self.cons
 
+def get_option_portfolio():
+	now = dt.now()
+	portf = ib.portfolio()
 
+	portfolio_options = [p.contract for p in portf if
+						 p.contract.__class__.__name__ == 'Option' and p.contract.symbol == 'SPX']
+	portfolio_opt_pos = [p.position for p in portf if
+						 p.contract.__class__.__name__ == 'Option' and p.contract.symbol == 'SPX']
+	#portfolio_opt_mid = [p.marketPrice for p in portf if
+	#					 p.contract.__class__.__name__ == 'Option' and p.contract.symbol == 'SPX']
 
+	# print(portfolio_options)
+
+	df_portopts = util.df(portfolio_options)
+	pos = pd.Series(portfolio_opt_pos)
+	#mid = pd.Series(portfolio_opt_mid)
+	df_portopts.drop(
+		['secType', 'multiplier', 'exchange', 'primaryExchange', 'currency', 'tradingClass', 'includeExpired',
+		 'secIdType', 'secId', 'comboLegsDescrip', 'comboLegs', 'deltaNeutralContract'], axis=1, inplace=True)
+	df_portopts['POSITION'] = pos.values
+	df_portopts = df_portopts.rename(columns={'localSymbol': 'OPTION_REF'})
+	#### Detailed download of Portfolio Columns ---> not neccessary for crosscheck feature
+
+	#df_portopts = df_portopts.rename(columns={'lastTradeDateOrContractMonth': 'EXPIRATION'})
+
+	#df_portopts = df_portopts.rename(columns={'right': 'RIGHT'})
+	#df_portopts = df_portopts.rename(columns={'strike': 'STRIKE'})
+
+	#df_portopts['MID'] = mid.values
+	#df_portopts['EXPIRATION'] = pd.to_datetime(df_portopts['EXPIRATION'])
+	#df_portopts['DTE'] = (df_portopts['EXPIRATION'] - dt.today()).dt.days
+	#df_portopts['EXPIRATION'] = df_portopts['EXPIRATION'].dt.strftime('%Y%m%d')
+
+	#conIds = df_portopts['conId'].tolist()
+	#contracts = [Contract(conId=id, exchange='SMART') for id in conIds]
+	#ib.qualifyContracts(*contracts)
+	#tickers = ib.reqTickers(*contracts)
+	#ib.sleep(2)
+	#try:
+	#	vols = [t.modelGreeks.impliedVol for t in tickers]
+	#	df_portopts['ibIV'] = vols
+	#except:
+	#	pass
+	#try:
+	#	deltas = [t.modelGreeks.delta for t in tickers]
+	#	df_portopts['ibDelta'] = deltas
+	#except:
+	#	pass
+
+	#df_portopts['TRADE_DT'] = now.strftime("%Y%m%d")
+	#df_portopts['TRADE_TIME'] = now.strftime("%H:%M:%S")
+	#cols = ["TRADE_DT", "TRADE_TIME", "EXPIRATION", "STRIKE", "RIGHT", "OPTION_REF", "MID", "POSITION"]
+	cols = ["OPTION_REF", "POSITION"]
+	df_portopts = df_portopts[cols]
+	return df_portopts
+
+def update_portfolio():
+	print('Updating IB positions....')
+	df = get_option_portfolio()
+	while True: # run loop to prevent Excel error when interacting with sheet
+		try:
+			sht4.range('A1:I1').expand('right').clear_contents()
+			sht4.range('A1:I1').options(index=True, expand='down').value = df
+			break
+		except com_error as reason:
+			print (reason)
+			continue
+	print('finished updating IBOPENPOS tab....')
 
 def start_ticks():
 	df = op.update_ticks()[0]  # return only df (not self.opentickers and self.cons)
@@ -281,7 +349,7 @@ def start_ticks():
 
 
 if __name__ == "__main__":
-
+	nest_asyncio.apply()
 	signal.signal(signal.SIGINT, signal_handler)
 
 # create ib_insync IB() instance and connect to TWS
@@ -301,6 +369,7 @@ if __name__ == "__main__":
 	sht1 = wb.sheets[stream2tab]
 	sht2 = wb.sheets['RFRATE']
 	sht3 = wb.sheets['OPENPOS']
+	sht4 = wb.sheets['IBOPENPOS']
 	print('streaming Libor data to Excel...')
 	sht2.range('c1').options(index=False).value = df_lib
 
@@ -310,6 +379,7 @@ if __name__ == "__main__":
 	print("starting data streaming...")
 	while True:
 		start_streaming(contracts, spx)
+		update_portfolio()
 		end = time.time() + wait_data
 		while time.time() < end:
 			ib.sleep(wait_openpos)
