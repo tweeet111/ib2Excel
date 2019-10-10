@@ -13,8 +13,9 @@ lower_strike_range= 0.5  # only update strikes  down from current SPX spot (e.g.
 # update interval in seconds
 wait_openpos = 0.1
 wait_data = 300
+wait_portfolio = 10
 
 # Excel workbook name
 #workbook = 'Backtest_software_v0.069.xlsm'
-workbook = "live_example5.xlsb"
+workbook = "live_example6.xlsb"
 stream2tab = "DATA" # "FM_FEED"

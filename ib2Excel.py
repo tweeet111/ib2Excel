@@ -69,12 +69,18 @@ def get_tickers(min_dte=30, max_dte=250, strike_distance=25, upper_strike_range=
 	spx = Index('SPX', 'CBOE')
 	ib.qualifyContracts(spx)
 	spx_ticker = ib.reqMktData(spx, '', False, False)
+
+	timeout = time.time() + 3
 	while spx_ticker.last != spx_ticker.last:
 		ib.sleep(0.01)
+		if time.time()>timeout:
+			spxValue = spx_ticker.close
+			break
 	if isNan(spx_ticker.last):
 		spxValue = spx_ticker.close
 	else:
 		spxValue = spx_ticker.last
+
 
 	print(spxValue)
 
@@ -131,8 +137,12 @@ def update_price(contracts, spx):
 	now = dt.now()
 
 	spx_ticker = ib.reqMktData(spx, '', False, False)
+	timeout = time.time() + 3
 	while spx_ticker.last != spx_ticker.last:
 		ib.sleep(0.01)
+		if time.time() > timeout:
+			spxValue = spx_ticker.close
+			break
 	if isNan(spx_ticker.last):
 		spxValue = spx_ticker.close
 	else:
@@ -209,8 +219,12 @@ class OpenPos(object):
 
 
 	def update_ticks(self):
+		timeout = time.time() + 2
 		while self.spx_ticker.last != self.spx_ticker.last:
 			ib.sleep(0.01)
+			if time.time() > timeout:
+				spxValue = self.spx_ticker.close
+				break
 		if isNan(self.spx_ticker.last):
 			spxValue = self.spx_ticker.close
 		else:
@@ -289,6 +303,7 @@ def get_option_portfolio():
 		 'secIdType', 'secId', 'comboLegsDescrip', 'comboLegs', 'deltaNeutralContract'], axis=1, inplace=True)
 	df_portopts['POSITION'] = pos.values
 	df_portopts = df_portopts.rename(columns={'localSymbol': 'OPTION_REF'})
+
 	#### Detailed download of Portfolio Columns ---> not neccessary for crosscheck feature
 
 	#df_portopts = df_portopts.rename(columns={'lastTradeDateOrContractMonth': 'EXPIRATION'})
@@ -379,10 +394,12 @@ if __name__ == "__main__":
 	print("starting data streaming...")
 	while True:
 		start_streaming(contracts, spx)
-		update_portfolio()
 		end = time.time() + wait_data
 		while time.time() < end:
-			ib.sleep(wait_openpos)
-			start_ticks()
+			end2 = time.time() + wait_portfolio
+			update_portfolio()
+			while time.time() < end2:
+				ib.sleep(wait_openpos)
+				start_ticks()
 
 
