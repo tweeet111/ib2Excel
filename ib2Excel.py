@@ -344,7 +344,7 @@ def update_portfolio():
 	df = get_option_portfolio()
 	while True: # run loop to prevent Excel error when interacting with sheet
 		try:
-			sht4.range('A1:I1').expand('right').clear_contents()
+			sht4.range('A1:I1').expand('down').clear_contents()
 			sht4.range('A1:I1').options(index=True, expand='down').value = df
 			break
 		except com_error as reason:
